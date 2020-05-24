@@ -1,0 +1,123 @@
+```{r }
+library(egcm)
+library(tseries)
+
+nominalFX = read.csv("./Data/FXRates.csv")
+priceLevel = read.csv("./Data/pricelevels.csv")
+
+#---------------FOR EXTENDED DATA (June 1973 - December 1998)----------------------------#
+#for results on extended data pl2ease uncomment the below 4 lines to add the data for extended period and then continue as usual
+
+nominalFX2 = read.csv("./Data/FXRates2.csv") #data from January 1986 to December 1998
+priceLevel2 = read.csv("./Data/pricelevels2.csv") #data from January 1986 to December 1998
+nominalFX = rbind(nominalFX, nominalFX2) #combined data from June 1973 to December 1998
+priceLevel = rbind(priceLevel, priceLevel2) #combined data from June 1973 to December 1998
+
+
+#------------------------------------------------------------------------------------------#
+
+```
+
+```{r ner2, echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+#--------------------NOMINAL EXCHANGE RATES-------------------------#
+
+# (since the paper uses nominal exhange rate as local currency per foreign currency and IMF data is foreign currency per USD
+#   we use the reciprocral of the IMF data to get it in the consistent format)
+
+ner2 <- matrix(NA, nrow = 5, ncol = 3) %>%
+  as.data.frame() %>%
+  setNames(c("Country", "ADF p-value of series", "ADF p-value of first differences"))
+
+ 
+for (i in 2:6) {
+
+  ner2[i-1, ] <- c(colnames(nominalFX)[i],
+                  #ADF on log of nominal exchange rates: fail to reject null hypothesis of non-stationarity in any of these
+                  adf.test(log(1/nominalFX[,i]))$p.value,
+                  #ADF on first difference: we can reject null hypothesis of stationarity in the difference in all of these with 0.05 confidence
+                  adf.test(diff(1/log(nominalFX[,i])))$p.value
+                  ) 
+}
+
+ner2 <- ner2 %>%
+  mutate_at(vars(2:3), funs(number(as.numeric(.), .01)))
+ner2[ner2 == "0.01"] <- "< 0.01"
+
+kable(ner2, caption = "Testing null-hypothesis of I(1) in the nominal exchange rate for 1973 - 1998", 
+        align = c("l", rep("c", 2))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+  
+#Thus we can not reject null hypothesis that nominal exchange rates are I(1) for any of the 5 countries
+```
+
+```{r pl2, echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+#-------------------RELATIVE PRICES--------------------------------#
+
+pl2 <- matrix(NA, nrow = 5, ncol = 3) %>%
+  as.data.frame() %>%
+  setNames(c("Country", "ADF p-value of series", "ADF p-value of first differences"))
+
+for (i in 2:6) {
+  
+  pl2[i-1, ] <- c(colnames(priceLevel)[i],
+                 #ADF on log of relative price levels: fail to reject null hypothesis of non-stationarity all with one exception
+                 adf.test(log(priceLevel[,"US"]/priceLevel[,i]))$p.value,
+                 #ADF of first difference: we can reject null hypothesis of non-stationarity in the difference in all countries with 95% CI
+                 adf.test(diff(log(priceLevel[,"US"]/priceLevel[,i])))$p.value
+  ) 
+}
+
+pl2 <- pl2 %>%
+  mutate_at(vars(2:3), funs(number(as.numeric(.), .01)))
+pl2[pl2 == "0.01"] <- "< 0.01"
+
+kable(pl2, caption = "Testing null-hypothesis of I(1) in the relative price levels for 1973 - 1998", 
+        align = c("l", rep("c", 2))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+# Thus we can not reject null hypothsis that relative prices are I(1) with one exception 
+```
+
+```{r coin2, echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+#-------------------COINTEGRATION--------------------------------#
+
+coin2 <- matrix(NA, nrow = 5, ncol = 5) %>%
+  as.data.frame()
+
+
+for (i in 2:6) {
+  
+  x <- lm (log(1/nominalFX[,i]) ~ log(priceLevel[,"US"]/priceLevel[,i]))
+  y <- summary(x)
+  
+  z <- adf.test(x$residuals)
+  
+  coin2[i-1, ] <- c(colnames(priceLevel)[i],
+                 x$coefficients,
+                 y$r.squared,
+                 z$p.value
+                 
+  ) 
+}
+
+#residuals are not stationary - thus we can not reject I(1) hypothesis for the residuals
+# thus we can not claim to have found cointegration
+  
+for (i in 2:6) {
+  
+  egcm(log(priceLevel[,"US"]/priceLevel[,i]),log(nominalFX[,i]) , urtest = "adf") 
+ 
+}
+
+coin2 <- coin2 %>%
+  bind_cols("c" = rep("Not cointegrated", 5)) %>%
+  setNames(c("Country", "Constant", "$\\beta$", "$R^2$", "ADF p-value of reg residuals", "EGCM test")) %>%
+  mutate_at(vars(2:5), funs(number(as.numeric(.), .01)))
+coin2[coin2 == "0.01"] <- "< 0.01"
+
+kable(coin2, caption = "Cointegration regressions for 1973 - 1998", 
+        align = c("l", rep("c", 5))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+#yields same conclusion of no cointegration
+```

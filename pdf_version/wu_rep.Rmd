@@ -1,0 +1,101 @@
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# ------------------------------------------------------------------------------------------
+# -- Countries
+# ------------------------------------------------------------------------------------------  
+
+# Countries Names and Codes
+iso2c <- c('AU', 'AT', 'BE', 'CA', 'DE', 'DK', 'ES', 'FI', 'FR', 'GB', 'GR', 'IT', 'JP', 'NL', 'NO', 
+           'PT', 'SE', 'CH', 'IE', 'NZ', 'US')
+
+countries <- c("Australia", "Austria", "Belgium", "Canada", "Germany", "Denmark", "Spain", "Finland", "France", 
+               "Britain", "Greece", "Italy", "Japan", "Netherlands", "Norway", "Portugal", 
+               "Sweden", "Switzerland", "Ireland", "New Zealand", "United States")
+
+country <- cbind(iso2c, countries)
+country_df <- as.data.frame(cbind(iso2c, countries)) 
+
+# ------------------------------------------------------------------------------------------
+# -- Quarterly Consumer Price Index (cpi)
+# ------------------------------------------------------------------------------------------  
+
+q_cpi <- imf_data(database_id = 'IFS', indicator = 'PCPI_IX',country = iso2c, freq = 'Q',
+                  start = '1973-03-31', end = '1997-12-31') # Download data from IMF - IFS
+
+colnames(q_cpi) <- c("country", "time", "cpi") # Renaming columns
+factor(q_cpi$country, levels = iso2c, labels = countries) # Countries as factors
+q_cpi <- cbind(q_cpi[,-3], log(q_cpi$cpi)) # Transforming to have: log(CPI)
+colnames(q_cpi) <- c("country", "time", "cpi")
+# write.csv(q_cpi, file = "q_cpi.csv")
+
+# ------------------------------------------------------------------------------------------
+# -- Quarterly Nominal Exchange Rate (er)
+# ------------------------------------------------------------------------------------------  
+
+# Quarterly Nominal Exchange Rate (USD/Domestic Currency)
+q_er <- imf_data(database_id = 'IFS', indicator = 'EDNA_USD_XDC_RATE', country = iso2c, freq = 'Q',
+                 start = '1973-03-31', end = '1997-12-31') # Download data from IMF-IFS
+
+colnames(q_er) <- c("country", "time", "er") # Renaming columns
+factor(q_er$country, levels = iso2c, labels = countries) # Countries as factors
+q_er <- cbind(q_er[, -3], log(1/q_er$er)) # Transforming to have: log(Domestic Currency / US Dollar)
+colnames(q_er) <- c("country", "time", "er")
+#write.csv(q_er, file = "q_er.csv")
+
+# ------------------------------------------------------------------------------------------
+# -- Real Exchange Rate (rer)
+# ------------------------------------------------------------------------------------------  
+q_us_cpi <- q_cpi[q_cpi$country == "US", "cpi"] # Vector with US cpi
+q_rer <- cbind(q_er[, -3], "rer" = q_er$er - q_cpi$cpi + q_us_cpi) # Real Exchange rate in logs: q = e + us_cpi - local_cpi 
+q_rer <- q_rer[q_rer$country != "US",] # Taking out US of the sample
+
+rer_by_country <- split(q_rer, q_rer$country) # List with each country time serie as an element
+rer_by_country <- rer_by_country[-21] #Taking out US of the list
+
+ts_q <- function(x){
+  return(ts(x$rer, start = c(1973, 2), end = c(1997, 4), frequency = 4))
+} # This function takes an element of a list and set time series
+rer_by_country <- lapply(rer_by_country, ts_q) # Setting time series for every country
+
+```
+
+```{r rer1, echo=FALSE, error=FALSE, fig.align='center', fig.cap="Average Country Real Exchange Rate", message=FALSE, warning=FALSE, out.width='75%'}
+
+(ggplot(data= q_rer, aes(x = country, y = rer)) +
+    
+    # Geoms
+    stat_boxplot(geom = "boxplot") +
+    stat_boxplot(geom = "errorbar") +
+    stat_summary(fun.y = mean, geom = "point", shape = 4, size = 1, color = "red")+
+    
+    # Axis
+    scale_x_discrete(name = "Countries") +
+    scale_y_continuous(name = "Real Exchange Rate"))
+
+```
+
+```{r rer2, echo=FALSE, error=FALSE, fig.align='center', fig.cap="Average Year Real Exchange Rate", message=FALSE, warning=FALSE, out.width='75%'}
+
+index <- q_rer %>%
+  group_by(country) %>%
+  mutate(index = ifelse(time == "1973-Q2", 1, rer/first(rer))) %>%
+  ungroup() %>%
+  mutate(quarter = substr(time, 6, 7),
+         year = substr(time, 3, 4)) %>%
+  filter(quarter == "Q4") %>%
+  
+  ggplot(aes(x = year, y = index)) +
+  
+  # Geom
+  geom_line(aes(group = country, color = country)) +
+  
+  # Axis
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Real Exchange Rate", limits = c(-1, 4)) +
+  
+  # Theme
+  theme(legend.position = "bottom") +
+  scale_color_discrete(name = "")
+
+index
+```
+

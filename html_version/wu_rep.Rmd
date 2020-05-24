@@ -1,0 +1,195 @@
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# ------------------------------------------------------------------------------------------
+# -- Countries
+# ------------------------------------------------------------------------------------------  
+
+# Countries Names and Codes
+iso2c <- c('AU', 'AT', 'BE', 'CA', 'DE', 'DK', 'ES', 'FI', 'FR', 'GB', 'GR', 'IT', 'JP', 'NL', 'NO', 
+           'PT', 'SE', 'CH', 'IE', 'NZ', 'US')
+
+countries <- c("Australia", "Austria", "Belgium", "Canada", "Germany", "Denmark", "Spain", "Finland", "France", 
+               "Britain", "Greece", "Italy", "Japan", "Netherlands", "Norway", "Portugal", 
+               "Sweden", "Switzerland", "Ireland", "New Zealand", "United States")
+
+country <- cbind(iso2c, countries)
+country_df <- as.data.frame(cbind(iso2c, countries)) 
+
+# ------------------------------------------------------------------------------------------
+# -- Quarterly Consumer Price Index (cpi)
+# ------------------------------------------------------------------------------------------  
+
+q_cpi <- imf_data(database_id = 'IFS', indicator = 'PCPI_IX',country = iso2c, freq = 'Q',
+                  start = '1973-03-31', end = '1997-12-31') # Download data from IMF - IFS
+
+colnames(q_cpi) <- c("country", "time", "cpi") # Renaming columns
+factor(q_cpi$country, levels = iso2c, labels = countries) # Countries as factors
+q_cpi <- cbind(q_cpi[,-3], log(q_cpi$cpi)) # Transforming to have: log(CPI)
+colnames(q_cpi) <- c("country", "time", "cpi")
+# write.csv(q_cpi, file = "q_cpi.csv")
+
+# ------------------------------------------------------------------------------------------
+# -- Quarterly Nominal Exchange Rate (er)
+# ------------------------------------------------------------------------------------------  
+
+# Quarterly Nominal Exchange Rate (USD/Domestic Currency)
+q_er <- imf_data(database_id = 'IFS', indicator = 'EDNA_USD_XDC_RATE', country = iso2c, freq = 'Q',
+                 start = '1973-03-31', end = '1997-12-31') # Download data from IMF-IFS
+
+colnames(q_er) <- c("country", "time", "er") # Renaming columns
+factor(q_er$country, levels = iso2c, labels = countries) # Countries as factors
+q_er <- cbind(q_er[, -3], log(1/q_er$er)) # Transforming to have: log(Domestic Currency / US Dollar)
+colnames(q_er) <- c("country", "time", "er")
+#write.csv(q_er, file = "q_er.csv")
+
+# ------------------------------------------------------------------------------------------
+# -- Real Exchange Rate (rer)
+# ------------------------------------------------------------------------------------------  
+q_us_cpi <- q_cpi[q_cpi$country == "US", "cpi"] # Vector with US cpi
+q_rer <- cbind(q_er[, -3], "rer" = q_er$er - q_cpi$cpi + q_us_cpi) # Real Exchange rate in logs: q = e + us_cpi - local_cpi 
+q_rer <- q_rer[q_rer$country != "US",] # Taking out US of the sample
+
+rer_by_country <- split(q_rer, q_rer$country) # List with each country time serie as an element
+rer_by_country <- rer_by_country[-21] #Taking out US of the list
+
+ts_q <- function(x){
+  return(ts(x$rer, start = c(1973, 2), end = c(1997, 4), frequency = 4))
+} # This function takes an element of a list and set time series
+rer_by_country <- lapply(rer_by_country, ts_q) # Setting time series for every country
+
+```
+
+```{r rer1, echo=TRUE, error=FALSE, fig.align='center', fig.cap="Average Country Real Exchange Rate", message=FALSE, warning=FALSE, out.width='100%'}
+
+(ggplot(data= q_rer, aes(x = country, y = rer)) +
+    
+    # Geoms
+    stat_boxplot(geom = "boxplot") +
+    stat_boxplot(geom = "errorbar") +
+    stat_summary(fun.y = mean, geom = "point", shape = 4, size = 1, color = "red")+
+    
+    # Axis
+    scale_x_discrete(name = "Countries") +
+    scale_y_continuous(name = "Real Exchange Rate")) %>% 
+  
+  ggplotly()
+
+```
+
+```{r rer2, echo=TRUE, error=FALSE, fig.align='center', fig.cap="Average Year Real Exchange Rate", message=FALSE, warning=FALSE, out.width='100%'}
+
+index <- q_rer %>%
+  group_by(country) %>%
+  mutate(index = ifelse(time == "1973-Q2", 1, rer/first(rer))) %>%
+  ungroup() %>%
+  mutate(quarter = substr(time, 6, 7),
+         year = substr(time, 3, 4)) %>%
+  filter(quarter == "Q4") %>%
+  
+  ggplot(aes(x = year, y = index)) +
+  
+  # Geom
+  geom_line(aes(group = country, color = country)) +
+  
+  # Axis
+  scale_x_discrete(name = "Year") +
+  scale_y_continuous(name = "Real Exchange Rate", limits = c(-1, 4)) +
+  
+  # Theme
+  theme(legend.position = "none") 
+
+ggplotly(index)
+
+```
+
+```{r adf, echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+# ------------------------------------------------------------------------------------------
+# -- ADF Tests
+# ------------------------------------------------------------------------------------------  
+
+country_code <- NULL
+order <- NULL
+ro_c <- NULL
+ro_se <- NULL
+ADF <- NULL
+
+for(i in 1:20){
+  x <- ts(as.data.frame(rer_by_country[i]), start = c(1973, 2), end = c(1997, 4), frequency = 4) # Take every country serie
+  # install.packages("dynlm")
+  library(dynlm)
+  lagmodel <- dynlm(d(x) ~ L(x, 1) + d(L(x, 1:12))) # Model with 12 lags
+  p <- as.numeric(summary(lagmodel)$coefficients[3:14, 4]) # Storing p-values to view significance 
+  a <- 12
+  b <- p[a]
+  while(b > 0.1){
+    a <- a - 1 
+    lagmodel <- dynlm(d(x) ~ L(x, 1) + d(L(x, 1:a)))
+    p <- summary(lagmodel)$coefficients[3:(a + 2), 4]
+    b <- p[a]
+  } # This loop drop lags with no significance (10%) until find a significant lag
+  library(tseries)
+  adf <- adf.test(x, k = a) # ADF Test for every country, with the lag specified by the loop
+  country_code[i] <- names(rer_by_country[i]) # Storing the country code
+  order[i] <- a # Storing the country lag
+  ro_c[i] <- round(lagmodel$coefficients[2], 3) # Storing the country coefficient
+  ro_se[i] <- round((summary(lagmodel)$coefficients[, 2])[2], 3) # Storing the country standar deviation
+  ADF[i] <- round(adf$p.value, 3) # Storing the country ADF 
+}
+
+cbind(country_code, order, ro_c, ro_se, ADF) %>%
+  setNames(c("iso2c", "Order", "Ro", "SE", "p-Value")) %>%
+  as.data.frame() %>%
+  left_join(data.frame(country), by = c("country_code" = "iso2c")) %>%
+  select(countries, everything(), -country_code) %>%
+  setNames(c("Country", "Lag Order", "$\\rho$", "SE", "p-value")) %>%
+  # Table
+  kable(caption = "ADF Tests", align = c("l", rep("c", 4))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box("500px")
+```
+
+```{r purt, echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+# ------------------------------------------------------------------------------------------
+# -- Panel Unit Roots Test 
+# ------------------------------------------------------------------------------------------  
+
+# First, we have to create the contry groups:
+q_rer_20 <- q_rer
+
+q_rer_10 <- q_rer_20[q_rer_20$country == "BE" | q_rer_20$country == "CA" | q_rer_20$country == "FR" | 
+                       q_rer_20$country == "DE" | q_rer_20$country == "IT" | q_rer_20$country == "JP" | 
+                       q_rer_20$country == "NL" | q_rer_20$country == "SW" | q_rer_20$country == "ST" | 
+                       q_rer_20$country == "GB",]
+
+q_rer_6 <- q_rer_20[q_rer_20$country == "CA" | q_rer_20$country == "FR" | q_rer_20$country == "DE" |
+                      q_rer_20$country == "IT" | q_rer_20$country == "JP" | q_rer_20$country == "GB",]
+
+q_rer_EC <- q_rer_20[q_rer_20$country == "BE" | q_rer_20$country == "FR" | q_rer_20$country == "GB" |
+                       q_rer_20$country == "DE" | q_rer_20$country == "IT" | q_rer_20$country == "IE" | 
+                       q_rer_20$country == "NL" | q_rer_20$country == "PT" | q_rer_20$country == "ES",]
+
+q_rer_EMS <- q_rer_20[q_rer_20$country == "BE" | q_rer_20$country == "FR" | q_rer_20$country == "FI" |
+                        q_rer_20$country == "DE" | q_rer_20$country == "IT" | q_rer_20$country == "IE" | 
+                        q_rer_20$country == "NL" | q_rer_20$country == "PT" | q_rer_20$country == "ES" |
+                        q_rer_20$country == "AT", ]  
+
+groups <- list("All 20" = q_rer_20, "EC" = q_rer_EC, "EMS" = q_rer_EMS, "G6" = q_rer_6, "G10" = q_rer_10) # Store all groups in a list
+
+IPS <- NULL
+MW <- NULL
+
+for (i in 1:5){
+  library(plm)
+  ips <- purtest(rer ~ 1, data = groups[[i]], index = c("country", "time"), pmax = 12, exo = "intercept", test = "ips", lags = "AIC") #Pesaran Shin Test
+  mw <- purtest(rer ~ 1, data = groups[[i]], index = c("country", "time"), pmax = 12, exo = "intercept", test = "madwu", lags = "AIC") # Maddala Wu Test
+  IPS[i] <- round(ips$statistic$p.value, 3) # Storing IPS for every group
+  MW[i] <- round(mw$statistic$p.value, 3) # Storing MW for every group
+}
+
+cbind("Sample" = names(groups), "IPS" = IPS, "MW" =MW) %>%
+  # Table
+  kable(caption = "Panel Unit Roots Tests", align = c("l", rep("c", 2))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
