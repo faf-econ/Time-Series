@@ -20,7 +20,7 @@ Repository contains documentation to create pdf and the html versions of
 the paper and the actual outputs.
 
 HTML version:
-<https://faf-econ.github.io/Time_Series/html_version/Time-Series_v_html.html>
+<https://faf-econ.github.io/Time-Series/html_version/Time_Series_v_html.html>
 
 PDF version:
-<https://faf-econ.github.io/Time_Series/pdf_output/Time-Series_v_pdf.pdf>
+<https://faf-econ.github.io/Time-Series/pdf_version/Time_Series_v_pdf.pdf>
