@@ -1,5 +1,5 @@
 ---
-title: "Intertemporal Choice: A review of the Discount Functions and its implications"
+title: "The Purchasing Power Parity Puzzle"
 author: Fernando Agustin Falbo, Devashish Kumar, Daniela Leitch Barra
 
 output:

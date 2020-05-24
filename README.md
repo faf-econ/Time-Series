@@ -1,22 +1,26 @@
-Intertemporal Choice: A review of the Discount Functions and its
-implications
+The Purchasing Power Parity Puzzle
 ================
-Fernando Agustin Falbo
-May 2018
+Fernando Agustin Falbo, Devashish Kumar, Daniela Leitch Barra
 
-This work has three main goals. First, review three different discount
-models: the Exponential Discount Function, The Hyperbolic Discount
-Function and the Quasi-Hyperbolic Discount Function. The different
-features of these three models have different implications to deal with
-anomalies found empirically. Second, show how time inconsistency and
-decreasing discount rates affect decision making, causing Present Bias
-and Lack of Self Control. Finally, show how the latter two problems are
-solved by self mechanisms.
+Based in the Law of One Price, the basic theory concept underlying the
+Purchasing Power Parity is the convergence of the price levels of two
+countries under a common currency, however, despite its simplicity, it
+has been focus of strong debate sin the 1970’s. Despite how natural the
+mean reversal sounds, the difficulty to prove its convergence to a
+stationary mean has not only posed doubts over the validity of the own
+concept of PPP, but also over famous econometric methods, such as the
+unit root and cointegrartion methods. The low power of these tests has
+surged as a strong hypothesis, reason for what some econometricians have
+opted to try new methods, the most relevant, the panel data methods. The
+purpose of this paper is make explicit the difference of those methods
+in the particular context of the Purchasing Power Parity, by replicating
+two important papers in the field and comparing the results obtained.
 
-Repository contains documentation to create pdf and html versions of the paper and the actual outputs.
+Repository contains documentation to create pdf and the html versions of
+the paper and the actual outputs.
 
 HTML version:
-https://faf-econ.github.io/Behavioral/html_output/Behavioral_v_html.html
+<https://faf-econ.github.io/Time_Series/html_version/Time_Series_v_html.html>
 
 PDF version:
-https://faf-econ.github.io/Behavioral/pdf_output/Behavioral_v_pdf.pdf
+<https://faf-econ.github.io/Time_Series/pdf_output/Time_Series_v_pdf.pdf>
